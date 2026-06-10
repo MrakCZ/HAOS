@@ -9,8 +9,8 @@ blueprint:
       selector:
         entity:
           filter:
-            - integration: cert_expiry
-            - domain: sensor
+            integration: cert_expiry
+            domain: sensor
           multiple: false
     renew_date:
       name: Den obnovy
@@ -59,17 +59,21 @@ blueprint:
 alias: Obnova SSL Cert
 description: ''
 
-# Definice proměnných pro použití v triggeru/condition/action
 variables:
+  # Mapování všech inputů na proměnné, aby byly dostupné v šablonách
   certificate_var: !input cert_expiry_sensor
   var_check: !input renew_date
-  # Výpočet zbývajících dní (ošetřeno proti chybě, pokud senzor není dostupný)
+  send_notification_var: !input send_notification
+  restart_after_renewal_var: !input restart_after_renewal
+  notification_title_var: !input notification_title
+  notification_message_var: !input notification_message
+  # Výpočet zbývajících dní
   expire_days_var: >-
     {% set expiry = states(certificate_var) %}
     {% if is_state(certificate_var, 'unavailable') or is_state(certificate_var, 'unknown') %}
       100
     {% else %}
-      {{ ((as_timestamp(expiry) - as_timestamp(now())) / 86400) | int }}
+      {{ ((as_timestamp(expiry, 0) - as_timestamp(now())) / 86400) | int }}
     {% endif %}
 
 trigger:
@@ -78,7 +82,7 @@ trigger:
 
 condition:
   - condition: template
-    # Spustí se jen pokud počet dní do vypršení je menší než nastavená mez
+    # Spustí se jen pokud počet dní do vypršení je menší nebo roven nastavené mezi
     value_template: "{{ expire_days_var <= (var_check | int) }}"
 
 action:
@@ -90,17 +94,17 @@ action:
   # 2. Volitelná notifikace
   - if:
       - condition: template
-        value_template: "!input send_notification"
+        value_template: "{{ send_notification_var }}"
     then:
       - service: notify.notify
         data:
-          title: !input notification_title
-          message: !input notification_message
+          title: "{{ notification_title_var }}"
+          message: "{{ notification_message_var }}"
 
   # 3. Volitelný restart
   - if:
       - condition: template
-        value_template: "!input restart_after_renewal"
+        value_template: "{{ restart_after_renewal_var }}"
     then:
       - delay:
           minutes: !input minutes_till_restart
