@@ -1,0 +1,109 @@
+blueprint:
+  name: Obnova Let's Encrypt Certifikátu
+  description: Automatická obnova certifikátu a následné upozornění s volitelným restartem.
+  domain: automation
+  input:
+    cert_expiry_sensor:
+      name: Kontrola platnosti certifikátu
+      description: Vyberte senzor z integrace Certificate Expiry. (https://www.home-assistant.io/integrations/cert_expiry)
+      selector:
+        entity:
+          filter:
+            - integration: cert_expiry
+            - domain: sensor
+          multiple: false
+    renew_date:
+      name: Den obnovy
+      description: Kolik dní před vypršením spustit obnovu.
+      selector:
+        number:
+          min: 1
+          max: 29
+          mode: slider
+          unit_of_measurement: "dní"
+      default: 5
+    time_to_check_cert:
+      name: Čas kontroly
+      description: V kolik hodin se má platnost kontrolovat.
+      selector:
+        time:
+      default: "03:00:00"
+    restart_after_renewal:
+      name: Restartovat Home Assistant?
+      description: Po obnově certifikátu restartuje aplikaci Home Assistant.
+      selector:
+        boolean:
+      default: true
+    minutes_till_restart:
+      name: Prodleva před restartem
+      description: Počet minut, aby měl addon čas certifikát bezpečně zapsat.
+      selector:
+        number:
+          min: 1
+          max: 60
+          mode: slider
+          unit_of_measurement: "min"
+      default: 5
+    send_notification:
+      name: Zapnout notifikace
+      selector:
+        boolean:
+      default: false
+    notification_title:
+      name: Titulek notifikace
+      default: "Obnova certifikátu"
+    notification_message:
+      name: Zpráva
+      default: "Byl spuštěn proces obnovy SSL certifikátu."
+
+alias: Obnova SSL Cert
+description: ''
+
+# Definice proměnných pro použití v triggeru/condition/action
+variables:
+  certificate_var: !input cert_expiry_sensor
+  var_check: !input renew_date
+  # Výpočet zbývajících dní (ošetřeno proti chybě, pokud senzor není dostupný)
+  expire_days_var: >-
+    {% set expiry = states(certificate_var) %}
+    {% if is_state(certificate_var, 'unavailable') or is_state(certificate_var, 'unknown') %}
+      100
+    {% else %}
+      {{ ((as_timestamp(expiry) - as_timestamp(now())) / 86400) | int }}
+    {% endif %}
+
+trigger:
+  - platform: time
+    at: !input time_to_check_cert
+
+condition:
+  - condition: template
+    # Spustí se jen pokud počet dní do vypršení je menší než nastavená mez
+    value_template: "{{ expire_days_var <= (var_check | int) }}"
+
+action:
+  # 1. Spuštění addonu
+  - service: hassio.addon_start
+    data:
+      addon: core_letsencrypt
+
+  # 2. Volitelná notifikace
+  - if:
+      - condition: template
+        value_template: "!input send_notification"
+    then:
+      - service: notify.notify
+        data:
+          title: !input notification_title
+          message: !input notification_message
+
+  # 3. Volitelný restart
+  - if:
+      - condition: template
+        value_template: "!input restart_after_renewal"
+    then:
+      - delay:
+          minutes: !input minutes_till_restart
+      - service: homeassistant.restart
+
+mode: single
