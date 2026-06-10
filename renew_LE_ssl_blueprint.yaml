@@ -62,7 +62,7 @@ blueprint:
       default: "Obnova certifikátu"
     notification_message:
       name: Zpráva
-      default: "Byl spuštěn proces obnovy SSL certifikátu."
+      default: "Proces obnovy SSL certifikátu byl dokončen."
 
 alias: Obnova SSL Cert
 description: ''
