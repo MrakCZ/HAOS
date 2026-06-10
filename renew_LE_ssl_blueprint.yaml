@@ -1,6 +1,6 @@
 blueprint:
   name: Obnova Let's Encrypt Certifikátu
-  description: Automatická obnova certifikátu a následné upozornění na konkrétní telefon.
+  description: Automatická obnova certifikátu s notifikacemi na konkrétní telefon.
   domain: automation
   input:
     cert_expiry_sensor:
