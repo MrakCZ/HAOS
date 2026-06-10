@@ -1,11 +1,11 @@
 blueprint:
   name: Obnova Let's Encrypt Certifikátu
-  description: Automatická obnova certifikátu a následné upozornění s volitelným restartem.
+  description: Automatická obnova certifikátu a následné upozornění na konkrétní telefon.
   domain: automation
   input:
     cert_expiry_sensor:
       name: Kontrola platnosti certifikátu
-      description: Vyberte senzor z integrace Certificate Expiry. (https://www.home-assistant.io/integrations/cert_expiry)
+      description: Vyberte senzor z integrace Certificate Expiry.
       selector:
         entity:
           filter:
@@ -49,6 +49,14 @@ blueprint:
       selector:
         boolean:
       default: false
+    notify_device:
+      name: Zařízení pro notifikaci
+      description: Vyberte telefon, na který má přijít upozornění.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+          multiple: false
     notification_title:
       name: Titulek notifikace
       default: "Obnova certifikátu"
@@ -60,7 +68,6 @@ alias: Obnova SSL Cert
 description: ''
 
 variables:
-  # Mapování všech inputů na proměnné, aby byly dostupné v šablonách
   certificate_var: !input cert_expiry_sensor
   var_check: !input renew_date
   send_notification_var: !input send_notification
@@ -82,7 +89,6 @@ trigger:
 
 condition:
   - condition: template
-    # Spustí se jen pokud počet dní do vypršení je menší nebo roven nastavené mezi
     value_template: "{{ expire_days_var <= (var_check | int) }}"
 
 action:
@@ -91,15 +97,16 @@ action:
     data:
       addon: core_letsencrypt
 
-  # 2. Volitelná notifikace
+  # 2. Volitelná notifikace na vybrané zařízení
   - if:
       - condition: template
         value_template: "{{ send_notification_var }}"
     then:
-      - service: notify.notify
-        data:
-          title: "{{ notification_title_var }}"
-          message: "{{ notification_message_var }}"
+      - domain: mobile_app
+        type: notify
+        device_id: !input notify_device
+        title: "{{ notification_title_var }}"
+        message: "{{ notification_message_var }}"
 
   # 3. Volitelný restart
   - if:
